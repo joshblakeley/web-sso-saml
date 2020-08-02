@@ -1,4 +1,4 @@
-# web-sso-saml
+# web-sso-saml-grpc
 
 
 WIP for POC
