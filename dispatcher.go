@@ -11,7 +11,7 @@ type Dispatcher struct{}
 
 // Dispatch will be called on every request:
 func (d *Dispatcher) Dispatch(ctx context.Context, object *coprocess.Object) (*coprocess.Object, error) {
-	log.Println("Receiving object:", object)
+	log.Println("Receiving request:", object.Request)
 
 	// We dispatch the object based on the hook name (as specified in the manifest file), these functions are in hooks.go:
 	switch object.HookName {

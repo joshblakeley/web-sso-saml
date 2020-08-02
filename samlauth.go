@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	coprocess "github.com/TykTechnologies/tyk-protobuf"
+	"github.com/TykTechnologies/tyk/coprocess"
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"net/url"
@@ -21,7 +21,6 @@ import (
 
 
 var (
-	httpHandler http.Handler
 	logger = logrus.New()
 )
 
@@ -42,7 +41,7 @@ type SAMLConfig struct {
 
 func initialise() {
 	config := &SAMLConfig{
-		IDPMetadataURL: "",                  //os.Getenv("TYK_SAML_METADATA_URL"),
+		IDPMetadataURL: "https://login.microsoftonline.com/2a3490ef-c3df-4323-ae94-a75f83817991/federationmetadata/2007-06/federationmetadata.xml?appid=336fcc57-ddf4-4748-ab81-69dadbaf2648",                  //os.Getenv("TYK_SAML_METADATA_URL"),
 		CertFile: "myservice.cert",
 		KeyFile: "myservice.key",
 		BaseURL: "http://localhost:8080",    //os.Getenv("TYK_SAML_BASE_URL"),
@@ -86,9 +85,9 @@ func initialise() {
 			Key: keyPair.PrivateKey.(*rsa.PrivateKey),
 		}
 
-		metadataURL := rootURL.ResolveReference(&url.URL{Path: "/saml/metadata"})
-		acsURL := rootURL.ResolveReference(&url.URL{Path: "/saml/acs"})
-		sloURL := rootURL.ResolveReference(&url.URL{Path: "/saml/slo"})
+		metadataURL := rootURL.ResolveReference(&url.URL{Path: "websso/saml/metadata"})
+		acsURL := rootURL.ResolveReference(&url.URL{Path: "websso/saml/acs"})
+		sloURL := rootURL.ResolveReference(&url.URL{Path: "websso/saml/slo"})
 
 		logger.Debugf("SP metadata URL: %v", metadataURL.String())
 		logger.Debugf("SP acs URL: %v", acsURL.String())
@@ -115,17 +114,11 @@ func initialise() {
 		}
 		Middleware.RequestTracker = samlsp.DefaultRequestTracker(opts, &Middleware.ServiceProvider)
 
-
+		logger.Info("SAML Middleware initialised")
 }
 
 
-// AuthPlugin catches all requests made to this api, and uses it's own internal router
-// to handle auth requests & issue access tokens
-func SAMLWebSSO(object *coprocess.Object) (*coprocess.Object, error){
 
-
-return object, nil
-}
 
 type Handler struct {
 	Config *SAMLConfig
@@ -142,14 +135,14 @@ func (h *Handler) writeJSON(w http.ResponseWriter, data interface{}, code int) e
 	return err
 }
 
-func (h *Handler) HandleAuth() http.HandlerFunc {
+func HandleAuth() http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		session, err := Middleware.Session.GetSession(r)
 		if session != nil {
 			r = r.WithContext(samlsp.ContextWithSession(r.Context(), session))
-			//h.ServeHTTP(w, r)
+			//ServeHTTP(w, r)
 			return
 		}
 		if err == samlsp.ErrNoSession {
@@ -160,7 +153,7 @@ func (h *Handler) HandleAuth() http.HandlerFunc {
 }
 
 
-func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
+func HandleACS(w http.ResponseWriter, r *http.Request) {
 
 
 	err := r.ParseForm()
@@ -192,10 +185,32 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func (h *Handler) HandleMetadata(w http.ResponseWriter, r *http.Request) {
-
+func HandleMetadata(object *coprocess.Object) *coprocess.Object{
 	buf, _ := xml.MarshalIndent(Middleware.ServiceProvider.Metadata(), "", "  ")
-	w.Header().Set("Content-Type", "application/samlmetadata+xml")
-	w.Write(buf)
-	return
+	object.Request.ReturnOverrides.Headers = map[string]string{"Content-Type": "application/samlmetadata+xml"}
+	object.Request.ReturnOverrides.ResponseBody = string(buf)
+	object.Request.ReturnOverrides.ResponseCode = 200
+
+	return object
+}
+
+
+// AuthPlugin catches all requests made to this api, and uses it's own internal router
+// to handle auth requests & issue access tokens
+func SAMLWebSSO(object *coprocess.Object) (*coprocess.Object, error){
+
+	logger.Info("HELLO")
+
+	if object.Request.RequestUri == "websso/saml/metadata"{
+		return HandleMetadata(object), nil
+	}
+
+	if object.Request.RequestUri == "websso/saml/acs"{
+
+	}
+
+
+
+
+	return object, nil
 }

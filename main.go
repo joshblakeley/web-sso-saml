@@ -19,10 +19,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
+	initialise()
 
 	log.Printf("starting grpc server on %v", ListenAddress)
 	s := grpc.NewServer()
 	coprocess.RegisterDispatcherServer(s, &Dispatcher{})
-	go s.Serve(lis)
-
+	if err := s.Serve(lis); err != nil{
+		panic(err)
+	}
 }
